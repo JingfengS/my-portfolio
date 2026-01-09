@@ -1,8 +1,8 @@
 disabled = false
-languageCode = "en"
+languageCode = "en-us"
 languageName = "English"
 weight = 1
-title = "Blowfish"
+title = "Home"
 
 [params]
 displayName = "EN"
@@ -13,3 +13,8 @@ dateFormat = "2 January 2006"
 ["params.author"]
 name = "Jenfeng"
 image = "yukino.jpeg"
+headline = "Information Security @ SJTU | Learning Computer Graphics"
+links = [
+    { github = "https://github.com/JingfengS" },
+    { email = "mailto:jingfengsun050106@gmail.com" }
+]

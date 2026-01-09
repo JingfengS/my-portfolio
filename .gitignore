@@ -16,3 +16,5 @@ hugo_stats/json
 *.key
 *.pem
 credentials.json
+
+**/draft.txt

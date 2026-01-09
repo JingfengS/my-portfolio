@@ -1,0 +1,20 @@
+disabled = false
+languageCode = "zh-cn"
+languageName = "简体中文"
+weight = 2
+title = "主页"
+
+[params]
+displayName = "简体中文"
+isoCode = "zh"
+rtl = false
+dateFormat = "2 January 2006"
+
+["params.author"]
+name = "Jenfeng"
+image = "yukino.jpeg"
+headline = "Information Security @ SJTU | Learning Computer Graphics"
+links = [
+    { github = "https://github.com/JingfengS" },
+    { email = "mailto:jingfengsun050106@gmail.com" }
+]

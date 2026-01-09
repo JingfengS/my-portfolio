@@ -1,6 +1,15 @@
-baseURL = 'https://example.org/'
-languageCode = 'en-us'
-title = 'My New Hugo Site'
+baseURL = 'https://jingfengs.github.io/my-portfolio/'
+defaultContentLanguage = "en"
+title = "Jenfeng's Portfolio"
+
+[languages]
+  [languages.en]
+    languageName = "English"
+    contentDir = "content/en"
+  
+  [languages.zh]
+    languageName = "简体中文"
+    contentDir = "content/zh"
 
 [caches]
   [caches.images]
