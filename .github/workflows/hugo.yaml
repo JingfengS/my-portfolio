@@ -1,32 +1,67 @@
-name: Deploy Hugo site to Pages
-
+name: Build and deploy
 on:
   push:
-    branches: ["main"]
-
+    branches:
+      - main
+  workflow_dispatch:
 permissions:
   contents: read
   pages: write
   id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DART_SASS_VERSION: 1.83.0 # Consistent with modern Blowfish reqs
+      GO_VERSION: 1.23.4        # Stable Go version for Hugo Modules
+      HUGO_VERSION: 0.141.0     # Matching your local version
+      NODE_VERSION: 22.x        # Stable Node LTS
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive # Critical for Blowfish theme!
+          submodules: recursive
           fetch-depth: 0
 
-      - name: Setup Hugo
-        uses: cpina/github-action-hugo@v1
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          hugo-version: "latest"
-          extended: true # Critical for Blowfish CSS
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Build with Hugo
-        run: hugo --minify
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install Dart Sass
+        run: |
+          curl -sLJO "https://github.com/sass/dart-sass/releases/download/${DART_SASS_VERSION}/dart-sass-${DART_SASS_VERSION}-linux-x64.tar.gz"
+          tar -xf "dart-sass-${DART_SASS_VERSION}-linux-x64.tar.gz"
+          echo "$(pwd)/dart-sass" >> "${GITHUB_PATH}"
+
+      - name: Install Hugo
+        run: |
+          curl -sLJO "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
+          sudo dpkg -i "hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
+
+      # CRITICAL FOR BLOWFISH MODULES
+      - name: Hugo Mod Get
+        run: |
+          hugo mod download
+          hugo mod tidy
+
+      - name: Build the site
+        run: |
+          hugo \
+            --gc \
+            --minify \
+            --baseURL "${{ steps.pages.outputs.base_url }}/"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
