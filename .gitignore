@@ -1,0 +1,18 @@
+public/
+resources/_gen/
+hugo_stats/json
+
+# Hugo modules cache
+.hugo_build.temp
+
+**/.DS_Store
+.vscode/
+
+**/*.mov
+**/*.mp4
+
+.env
+.env.*
+*.key
+*.pem
+credentials.json
