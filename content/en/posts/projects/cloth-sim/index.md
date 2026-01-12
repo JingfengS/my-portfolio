@@ -35,7 +35,7 @@ The true technical depth of this project lies in the **External Exploration** ph
 - **Memory Management**: Excessive **heap allocation overhead** during spatial hash construction.
 - **Data Locality**: High **cache miss rates** during spatial map traversal for self-collision detection.
 
-3. **Optimization Strategies (30% Aggregate Speedup)**:
+3. **Optimization Strategies (16.7% Aggregate Speedup)**:
 
 - **Multi-threading**: Integrated **OpenMP** to parallelize wind force accumulation and self-collision impulse resolution.
 - **Cache-Friendly Data Structures**: Replaced `std::unordered_map` with a **Flat Spatial Grid** (a sorted `std::vector`). This approach utilizes a contiguous memory block to drastically reduce cache misses and eliminate per-frame heap allocations.
@@ -43,6 +43,15 @@ The true technical depth of this project lies in the **External Exploration** ph
 4. **XPBD Integration**:
 
 - To ensure numerical stability under extreme conditions (e.g., hurricane-force winds or near-infinite stiffness \\( k_s \\) ), I upgraded the solver to **Extended Position Based Dynamics**. Unlike traditional force-based models, XPBD treats constraints as position projections, ensuring the simulation remains unconditionally stable without "exploding."
+
+5. **XPBD Optimization** (47.3% Aggregate Speedup):
+
+- To maximize the throughput of the XPBD solver, I addressed the primary computational bottleneck: the iterative constraint projection phase, which initially accounted for nearly 74% of the simulation time, with **Graph coloring** and **Conflict-free parallelism**.
+
+| Physics Module      | Serial (ms/step) | Parallel (ms/step) | Speedup     |
+| :------------------ | :--------------- | :----------------- | :---------- |
+| **XPBD_Constraints**| 2.683            | **0.968** | **2.77x** |
+| **Total Step Time** | **3.629** | **1.914** | **+47.3%** |
 
 ## Part 1: Mass-Spring System
 
@@ -359,6 +368,17 @@ Note That `Spring` and `Provot` Avg time increased, this (+0.005ms) may due to O
 
 So far, the Verlet integration is fast but has a major flaw: it is not energy conserving. For example, when the `ks` of the cloth is very large, the cloth would explode. And for strong wind, the cloth will be stretching in a way it shouldn't. To address those flaws, I searched for a better integration method and found XPBD widely used in game industry. 
 
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="spring_high_ks.png" caption="**Fig 1:** Verlet High Ks" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="xpbd_high_ks.png" caption="**Fig 2:** XPBD High Ks" alt="Result 2" >}}
+    </div>
+</div>
+</div>
+
+
 #### 2.1 Extended Position Based Dynamics (XPBD)
 
 Unlike force-based solvers (Like Mass-Spring systems) which can explode if the `ks` is too large, XPBD treats constraints as geometric targets. It essentially asks: "Where should these two points move so that the distance between them is exactly `L`?
@@ -378,3 +398,42 @@ Where \(\tilde{\alpha} = \alpha / \Delta t^2\). This ensures that even with a hi
 4. **Update:** Finally, the velocity is updated based on the difference between the old position and the new, constraint-satisfied predicted position.
 $$\mathbf{v}_{new} = (\mathbf{p}_{final} - \mathbf{x}) / \Delta t$$
 $$\mathbf{x}_{new} = \mathbf{p}_{final}$$
+
+#### 3.2 Performance
+
+Though XPBD is more energy conserving, it is also more expensive to compute. At first glance, it is about 2x slower than Verlet. And for a 128x128 cloth, it is very time consuming to compute due many iterations of the solver and the \(O(N^2)\) complexity of the constraints projection.
+
+| Physics Module     | Avg (ms/step) | Percentage |
+| :----------------- | :------------ | :--------- |
+| **XPBD_Constraints** | 2.683         | 73.9%      |
+| **Self_Collision** | 0.849         | 23.4%      |
+| **XPBD_Predict** | 0.074         | 2.0%       |
+| **XPBD_Update** | 0.023         | 0.6%       |
+| **Total Step Time** | **3.629** | **100%** |
+
+### 3.3 Optimization
+
+n the XPBD solver, the most significant bottleneck is the iterative constraint projection. However, simply wrapping the loop with #pragma omp parallel for leads to Data Races.
+
+The Challenge: In a cloth mesh, a single PointMass is typically shared by multiple constraints (Structural, Shearing, and Bending springs). If two threads attempt to modify the predicted_position of the same particle simultaneously, the writes will conflict, leading to non-deterministic behavior, physical "jittering," or even system crashes.
+
+The Solution: **Graph Coloring:** To safely parallelize the solver, I implemented Graph Coloring. This technique treats the constraints as edges in a graph and ensures that no two edges of the same "color" share a common vertex.
+
+- **Batching:** All springs are grouped into "color batches" where every spring in a batch is topologically independent.
+
+- **Execution:** We iterate through each color batch sequentially, but parallelize the constraints within each batch using OpenMP. Since no two threads touch the same PointMass within a batch, we eliminate the need for expensive atomic operations and ensure thread safety.
+
+#### 3.4 Parallel Performance Results
+
+By applying Graph Coloring to the XPBD solver, the constraint projection phase—the most expensive part of the simulation—saw a massive performance gain.
+
+| Physics Module      | Serial (ms/step) | Parallel (ms/step) | Speedup     |
+| :------------------ | :--------------- | :----------------- | :---------- |
+| **XPBD_Constraints**| 2.683            | **0.968** | **~2.77x** |
+| **Self_Collision** | 0.849            | 0.850              | ~0%         |
+| **XPBD_Predict** | 0.074            | 0.072              | ~3%         |
+| **XPBD_Update** | 0.023            | 0.024              | ~0%         |
+| **Total Step Time** | **3.629** | **1.914** | **+47.3%** |
+
+**Analysis:**
+The parallelization reduced the constraint solving time by nearly 64%. While the Self_Collision overhead remains constant (as it was already optimized via spatial hashing), the overall frame budget is now much healthier, bringing the high-density \(128 \times 128\) simulation significantly closer to real-time interactive rates on the CPU.
