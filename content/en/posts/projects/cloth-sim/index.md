@@ -379,7 +379,7 @@ So far, the Verlet integration is fast but has a major flaw: it is not energy co
 </div>
 
 
-#### 2.1 Extended Position Based Dynamics (XPBD)
+#### 3.1 Extended Position Based Dynamics (XPBD)
 
 Unlike force-based solvers (Like Mass-Spring systems) which can explode if the `ks` is too large, XPBD treats constraints as geometric targets. It essentially asks: "Where should these two points move so that the distance between them is exactly `L`?
 
@@ -411,7 +411,7 @@ Though XPBD is more energy conserving, it is also more expensive to compute. At 
 | **XPBD_Update** | 0.023         | 0.6%       |
 | **Total Step Time** | **3.629** | **100%** |
 
-### 3.3 Optimization
+#### 3.3 Optimization
 
 n the XPBD solver, the most significant bottleneck is the iterative constraint projection. However, simply wrapping the loop with #pragma omp parallel for leads to Data Races.
 
