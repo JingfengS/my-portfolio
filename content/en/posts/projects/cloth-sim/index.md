@@ -298,3 +298,83 @@ The mirror shader uses an environment cubemap to simulate perfect reflection. By
         {{< figure src="mirror_sphere.png" caption="**Fig 2:** Mirror Shader on Sphere" alt="Result 2" >}}
     </div>
 </div>
+
+## Part 6: Extra Exploration
+
+### 1. Wind Simulation
+
+I implemented a wind simulation system to simulate the effect of wind on the cloth. at first, I used a simple technique that just add a sinusoidal force to every point mass in the cloth. However, this technique is not realistic enough. 
+
+Then I implemented a more physics-based approach using those metrics:
+- Aerodynamic Projection: The drag force is calculated by projecting the relative velocity \(\mathbf{v}_{rel} = \mathbf{v}_{wind} - \mathbf{v}_{cloth}\) onto the triangle's unit normal. By using a dot product, we extract only the wind component perpendicular to the surface and scale it by the triangle's area \(\mathbf{n}_{area}\) to determine the final force:
+$$
+\mathbf{F}_{drag} = \mathbf{n}_{area} \cdot \left(\mathbf{v}_{rel} \cdot \frac{\mathbf{n}_{area}}{\|\mathbf{n}_{area}\|} \right)
+$$
+
+- **Procedural Turbulence:** To simulate organic, gusty wind, I used a multi-frequency sine function that modulates the force based on space and time. This prevents the cloth from moving too uniformly by summing waves with different amplitudes and frequencies:
+$$T(s, t) = \sum \alpha_i \sin(\omega_i s + \phi_i t)$$
+
+This creates a pseudo-random scaler \(T\) used to perturb the base force by up to \(30\%\):
+$$\mathbf{F}_{final} = \mathbf{F}_{drag} \cdot (1.0 + 0.3 T)$$
+
+{{< video src="xpbd-better.webm" autoplay="true" loop="true" muted="true" preload="auto" playsinline="true" caption="**Fig1:** Wind Simulation" >}}
+
+### 2. Profiling and Optimization
+
+#### 2.1 **Profiling** 
+To optimize the performance of the cloth simulation, the first step is to profile the code to **identify the bottlenecks**. I wrote my own profiler to measure the time taken by each function in the simulation, which updated every frame step and printed the results to the console:
+
+| Physics Module | Avg (ms/step) | Percentage |
+| :--- | :--- | :--- |
+| **self_collision** | 0.187 | 50.9% |
+| **wind** | 0.108 | 29.4% |
+| **springs** | 0.044 | 11.9% |
+| Provot | 0.021 | 5.8% |
+| Verlet | 0.005 | 1.2% |
+| gravity | 0.003 | 0.8% |
+| collision | 0.000 | 0.0% |
+
+The results show that self_collision and wind are the most time-consuming functions, accounting for 50.9% and 29.4% of the total time, respectively, which is the main part we will be working on.
+
+#### 2.2 **Optimization**
+
+To achieve real-time performance, I implemented several hardware-level optimizations focusing on parallel throughput and memory locality:
+
+- **Parallel Computing with OpenMP:** I parallelized the force calculations and constraint projections. By using #pragma omp parallel for with thread-safe atomic operations for wind forces, I significantly reduced the per-step computation time across multiple CPU cores.Data 
+
+- **Locality & Spatial Hashing:** I replaced the traditional `std::unordered_map` with a `Sorted Continuum Data Structure`. By flattening the spatial map into a single contiguous std::vector and sorting it by hash value, I minimized Cache Misses. This allows the CPU's prefetcher to efficiently load neighboring particles during collision detection, as they are now stored in adjacent memory addresses.
+
+| Physics Module          | Baseline (Avg ms/step) | Optimized (Avg ms/step) | Performance Gain |
+| :---------------------- | :--------------------- | :---------------------- | :--------------- |
+| **Self-Collision (Total)**| 0.187                  | **0.159** | **+15.0%** |
+| **Wind Force** | 0.108                  | **0.066** | **+38.9%** |
+| **Spring Constraints** | 0.044                  | 0.050                   | -13.6%           |
+| **Numerical Integration**| 0.021                  | 0.025                   | -19.0%           |
+| **Verlet / Gravity** | 0.008                  | 0.008                   | 0%               |
+| **Total Step Time** | **0.368** | **0.308** | **+16.3%** |
+
+Note That `Spring` and `Provot` Avg time increased, this (+0.005ms) may due to OpenMP context switching, which can be accounted to system error.
+
+### 3. XPBD Integration
+
+So far, the Verlet integration is fast but has a major flaw: it is not energy conserving. For example, when the `ks` of the cloth is very large, the cloth would explode. And for strong wind, the cloth will be stretching in a way it shouldn't. To address those flaws, I searched for a better integration method and found XPBD widely used in game industry. 
+
+#### 2.1 Extended Position Based Dynamics (XPBD)
+
+Unlike force-based solvers (Like Mass-Spring systems) which can explode if the `ks` is too large, XPBD treats constraints as geometric targets. It essentially asks: "Where should these two points move so that the distance between them is exactly `L`?
+
+**The XPBD algorithm loop** follows a specific four-stage pipeline for every time step:
+
+1. **Prediction:** We ignore all constraints and apply external forces (Gravity, Wind). The mass `m` is moved to a temporary position predicted position `p` based on its current velocity:
+
+$$\mathbf{p} = \mathbf{x} + \mathbf{v} \Delta t + \mathbf{a}_{ext} \Delta t^2$$
+
+2. **Constraints Projection:** The is the core of the solver. We iterate through all constraints and adjust the predicted positions to satisfy the constraints. For a distance constraint \(C = \|\mathbf{p}_1 - \mathbf{p}_2\| - L\), the correction \(\Delta \lambda\) is calculated as:$$\Delta \lambda = \frac{-C - \tilde{\alpha} \lambda}{\sum w_i + \tilde{\alpha}}$$
+
+Where \(\tilde{\alpha} = \alpha / \Delta t^2\). This ensures that even with a high density like \(128 \times 128\), the cloth doesn't look like rubber.
+
+3. **Collision Handling:** After spring constraints are solved, we check for environment and self-collisions. Any points penetrating objects or other parts of the cloth are projected back to the surface.
+
+4. **Update:** Finally, the velocity is updated based on the difference between the old position and the new, constraint-satisfied predicted position.
+$$\mathbf{v}_{new} = (\mathbf{p}_{final} - \mathbf{x}) / \Delta t$$
+$$\mathbf{x}_{new} = \mathbf{p}_{final}$$
