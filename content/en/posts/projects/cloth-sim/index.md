@@ -58,7 +58,7 @@ The true technical depth of this project lies in the **External Exploration** ph
 In this part, I implemented the physical construction of the cloth using a **mass-spring system**. The process involved two main steps:
 generating a grid of `PointMass` objects and connecting them with `Spring` contraints to simulate the physical properties of the fabric.
 
-### 1. Grid Construction
+### 1.1 Grid Construction
 
 I implemented `Cloth::buildGrid` by iterating through `num_height_points` and `num_width_points`. For each point, I calculate its position based on the cloth's orientation:
 
@@ -68,7 +68,7 @@ I implemented `Cloth::buildGrid` by iterating through `num_height_points` and `n
 
 I also cross-referenced each \( (x, y) \) coordinate with the `pinned` vector to set the `pinned` boolean for specific point masses, ensuring they remain stationary during the simulation.
 
-### 2. Spring Construction
+### 1.2 Spring Construction
 
 To give the cloth its structure integrity, I implemented three types of spring constraints:
 
@@ -78,7 +78,7 @@ To give the cloth its structure integrity, I implemented three types of spring c
 
 - **Bending:** Connects a point mass to neighbors two units away (to the left and above) to provide resistance against folding.
 
-### 3. Wireframe Visualizations
+### 1.3 Wireframe Visualizations
 
 The following images show the wireframe structure of `scene/pinned2.json`. By toggling specific constraints, we can clearly see the different topologies created by the spirng types. (Click to zoom in)
 
@@ -96,9 +96,11 @@ The following images show the wireframe structure of `scene/pinned2.json`. By to
 
 ## Part 2: Simulation via numerical integration
 
+### 2.1 Verlet Integration
+
 In this part, I implemented the physical movement of the cloth using **Verlet Integration** and handled constraints to ensure the cloth doesn't over-stretch. By modifying parameters like `ks`, `density`, and `damping`, I observed how the cloth's material properties change.
 
-### 1. Effects of Spring Constant `ks`
+### 2.2 Effects of Spring Constant `ks`
 
 The `ks` value represents the stiffness of the springs.
 
@@ -114,7 +116,7 @@ The `ks` value represents the stiffness of the springs.
     </div>
 </div>
 
-### 2. Effects of Density
+### 2.3 Effects of Density
 
 Density affects the mass of each `PointMass`, which in turn influences blow gravity pulls on the cloth.
 
@@ -131,14 +133,14 @@ Density affects the mass of each `PointMass`, which in turn influences blow grav
     </div>
 </div>
 
-### 3. Effects of Damping
+### 2.4 Effects of Damping
 
 Damping simulated energy loss (like air resistance or internal friction). In my code, this is implemented as `(1 - damping / 100)` applied to the velocity term.
 
 - **Low Damping:** The cloth is extremely "bouncy" and takes a long time to come to rest.
-- **High Damping:** The cloth moves as if it is submerged in a thick iguid (like oil). It falls slowly and gracefully, coming to rest almost immediateky without any oscillation.
+- **High Damping:** The cloth moves as if it is submerged in a thick liquid (like oil). It falls slowly and gracefully, coming to rest almost immediately without any oscillation.
 
-### 4. Final Resting State
+### 2.5 Final Resting State
 
 Below is the shaded cloth from `scene/pinned4.json` with `ks=1500`, `density=15g/m^2`, and `damping=20`.
 
@@ -150,13 +152,13 @@ Below is the shaded cloth from `scene/pinned4.json` with `ks=1500`, `density=15g
 
 In this part, I implemented the interaction between the cloth and other 3D primitives (spheres and planes) by calculating sollision responses that push the cloth's point masses back to the surface of the object.
 
-### 1. Implementation details
+### 3.1 Implementation details
 
 - **Sphere Collision:** For each point mass, I check if its distance from the sphere's origin is less than or equal to the radius. If a collision is detected, I calculate the **tangent point** on the sphere's surface by extending the vector from the origin through the current position. THe point mass is then moved toward this tangent vector using a correction vector originating from its `last_position`, scaled by `(1 - friction)`.
 
 - **Plane Collision:** I use the dot product of the point mass's position (relative to a point on the plane) and the plane's normal to determine if the cloth has crossed from one side to the other. Upon crossing, I calculate the intersection point (tangent point) and offset it slightly by `SURFACE_OFFSET` to prevent the cloth from getting stuck inside the plane. The final position is updated similarly using a friction-scaled correction vector from the `last_position`.
 
-### 2. Sphere Collision Examples
+### 3.2 Sphere Collision Examples
 
 Varing the spring constant `ks` significantly alters the cloth's stiffness and how it drapes over the sphere:
 
@@ -172,7 +174,7 @@ Varing the spring constant `ks` significantly alters the cloth's stiffness and h
     </div>
 </div>
 
-### 3. Plane Collision Example
+### 3.3 Plane Collision Example
 
 The following image show the shaded cloth lying at rest on the plance. The collision response ensures the cloth remains on the surface without clipping.
 
@@ -180,17 +182,17 @@ The following image show the shaded cloth lying at rest on the plance. The colli
     {{< figure src="plane.png" caption="**Fig 1:** Shaded cloth lying at rest on the plane." alt="Result 1" >}}
 </div>
 
-## Part 4: Handling self-collisions
+## Part 4 Handling self-collisions
 
 To simulate realistic fabric folding without the cloth passing through itself, I implemented a **spatial hashing** algorithm to efficiently detect and resolve self-collisions.
 
-### 1. Implementation details
+### 4.1 Implementation details
 
 - **Spatial Hashing:** I implemented `hash_position` to partition 3D space into uniform grid boxes. Each `PointMass` is mapped to a unique grid box based on its position. In each step, `build_spatial_map` populates an `unordered_map`, allowing me to only check collisions between points in the same box.
 
-- **Collision Resolution:** For each point mass, I iterate through other points in its hash bucket. If two points are closer than `2 * thickness`, I apply a correction vector to push them aprat. These corrections are averaged and applied to the position, scaled down by `simalation_steps` to ensure stability.
+- **Collision Resolution:** For each point mass, I iterate through other points in its hash bucket. If two points are closer than `2 * thickness`, I apply a correction vector to push them apart. These corrections are averaged and applied to the position, scaled down by `simulation_steps` to ensure stability.
 
-### 2. Cloth falling and folding
+### 4.2 Cloth falling and folding
 
 The sequence below captures the cloth as it falls, makes initial contact with itself, and eventually settles into a folded state.
 
@@ -206,7 +208,7 @@ The sequence below captures the cloth as it falls, makes initial contact with it
     </div>
 </div>
 
-### Parameter Analysis
+### 4.3Parameter Analysis
 
 - **Density:** Increasing density makes the cloth heavier. Higher ensity leads to more compression and more frequent self-collisions.
 - **Spring Constant (ks):** A higher `ks` increases the cloth's resistance to bending and stretching. When `ks` is high, the cloth maintains larger, more open folds and resists overlapping.
@@ -222,7 +224,7 @@ The sequence below captures the cloth as it falls, makes initial contact with it
 
 ## Part 5: Shaders
 
-### 1. Shader Programs
+### 5.1 Shader Programs
 
 A shader program is a set of instructions that runs on the GPU to handle the graphics pipeline efficiently. In this project, shader programs are written in **GLSL** and consists two main components: **Vertex Shader** and **Fragment Shader**.
 
@@ -230,7 +232,7 @@ A shader program is a set of instructions that runs on the GPU to handle the gra
 
 - **Fragment Shader:** These process the pixels (fragments) generated by the rasterizer. They take the interpolated data from the vertex shader to compute the final pixel color, enabling complex lighting and material effects like specular highlights and textures.
 
-### 2. Blinn-Phong Shading Model
+### 5.2 Blinn-Phong Shading Model
 
 The Blinn-Phong shading model calculates a surface's color by combining three components:
 
@@ -258,7 +260,7 @@ The Blinn-Phong shading model calculates a surface's color by combining three co
 </div>
 </div>
 
-### 3. Textures Mapping
+### 5.3 Textures Mapping
 
 Texture mapping allows us to map a 2D image onto a 3D surface using UV coordinates. The shader samples the albedo from the texture and integrates it into the lighting calculations.
 
@@ -266,14 +268,14 @@ Texture mapping allows us to map a 2D image onto a 3D surface using UV coordinat
     {{< figure src="texture_map.png" caption="**Fig 1:** Textures Mapping" alt="Result 1" >}}
 </div>
 
-### 4. Bump vs. Displacement Mapping
+### 5.4 Bump vs. Displacement Mapping
 
 I implemented both bump and displacement mapping to add surface details:
 
 - **Bump Mapping:** Modifies the surface normals based on the derivatives (du, dv) of a height map. This creates the illusion of depth and detail through lighting without changing the actual geometry of the surface.
-- **Displacement Mapping:** Actually modifies the vertex positions in the vertax shader by shifting them along their normals according to the height map.
+- **Displacement Mapping:** Actually modifies the vertex positions in the vertex shader by shifting them along their normals according to the height map.
 
-\*Comparison:\*\* Bump mapping is computationally efficient and provides convincing surface details, but the sihouette remains perfectly smooth. Displacement mapping provides a realistic sihouette and physical geometry changes, but it requires a high mesh resolution to avoid blockiness.
+\*Comparison:\*\* Bump mapping is computationally efficient and provides convincing surface details, but the silhouette remains perfectly smooth. Displacement mapping provides a realistic silhouette and physical geometry changes, but it requires a high mesh resolution to avoid blockiness.
 
 <div class="bump-displace">
 <div class="flex flex-row gap-4">
@@ -295,7 +297,7 @@ I implemented both bump and displacement mapping to add surface details:
 </div>
 </div>
 
-### 5. Mirror Shader
+### 5.5 Mirror Shader
 
 The mirror shader uses an environment cubemap to simulate perfect reflection. By calculating a reflection vector based on the camera position and surface normal, we sample the environment map to get the final color.
 
@@ -310,7 +312,7 @@ The mirror shader uses an environment cubemap to simulate perfect reflection. By
 
 ## Part 6: Extra Exploration
 
-### 1. Wind Simulation
+### 6.1 Wind Simulation
 
 I implemented a wind simulation system to simulate the effect of wind on the cloth. at first, I used a simple technique that just add a sinusoidal force to every point mass in the cloth. However, this technique is not realistic enough. 
 
@@ -328,9 +330,9 @@ $$\mathbf{F}_{final} = \mathbf{F}_{drag} \cdot (1.0 + 0.3 T)$$
 
 {{< video src="xpbd-better.webm" autoplay="true" loop="true" muted="true" preload="auto" playsinline="true" caption="**Fig1:** Wind Simulation" >}}
 
-### 2. Profiling and Optimization
+### 6.2 Profiling and Optimization
 
-#### 2.1 **Profiling** 
+#### 6.2.1 **Profiling** 
 To optimize the performance of the cloth simulation, the first step is to profile the code to **identify the bottlenecks**. I wrote my own profiler to measure the time taken by each function in the simulation, which updated every frame step and printed the results to the console:
 
 | Physics Module | Avg (ms/step) | Percentage |
@@ -345,7 +347,7 @@ To optimize the performance of the cloth simulation, the first step is to profil
 
 The results show that self_collision and wind are the most time-consuming functions, accounting for 50.9% and 29.4% of the total time, respectively, which is the main part we will be working on.
 
-#### 2.2 **Optimization**
+#### 6.2.2 **Optimization**
 
 To achieve real-time performance, I implemented several hardware-level optimizations focusing on parallel throughput and memory locality:
 
@@ -364,7 +366,7 @@ To achieve real-time performance, I implemented several hardware-level optimizat
 
 Note That `Spring` and `Provot` Avg time increased, this (+0.005ms) may due to OpenMP context switching, which can be accounted to system error.
 
-### 3. XPBD Integration
+### 6.3 XPBD Integration
 
 So far, the Verlet integration is fast but has a major flaw: it is not energy conserving. For example, when the `ks` of the cloth is very large, the cloth would explode. And for strong wind, the cloth will be stretching in a way it shouldn't. To address those flaws, I searched for a better integration method and found XPBD widely used in game industry. 
 
@@ -379,7 +381,7 @@ So far, the Verlet integration is fast but has a major flaw: it is not energy co
 </div>
 
 
-#### 3.1 Extended Position Based Dynamics (XPBD)
+#### 6.3.1 Extended Position Based Dynamics (XPBD)
 
 Unlike force-based solvers (Like Mass-Spring systems) which can explode if the `ks` is too large, XPBD treats constraints as geometric targets. It essentially asks: "Where should these two points move so that the distance between them is exactly `L`?
 
@@ -399,7 +401,7 @@ Where \(\tilde{\alpha} = \alpha / \Delta t^2\). This ensures that even with a hi
 $$\mathbf{v}_{new} = (\mathbf{p}_{final} - \mathbf{x}) / \Delta t$$
 $$\mathbf{x}_{new} = \mathbf{p}_{final}$$
 
-#### 3.2 Performance
+#### 6.3.2 Performance
 
 Though XPBD is more energy conserving, it is also more expensive to compute. At first glance, it is about 2x slower than Verlet. And for a 128x128 cloth, it is very time consuming to compute due many iterations of the solver and the \(O(N^2)\) complexity of the constraints projection.
 
@@ -411,7 +413,7 @@ Though XPBD is more energy conserving, it is also more expensive to compute. At 
 | **XPBD_Update** | 0.023         | 0.6%       |
 | **Total Step Time** | **3.629** | **100%** |
 
-#### 3.3 Optimization
+#### 6.3.3 Optimization
 
 n the XPBD solver, the most significant bottleneck is the iterative constraint projection. However, simply wrapping the loop with #pragma omp parallel for leads to Data Races.
 
@@ -423,7 +425,7 @@ The Solution: **Graph Coloring:** To safely parallelize the solver, I implemente
 
 - **Execution:** We iterate through each color batch sequentially, but parallelize the constraints within each batch using OpenMP. Since no two threads touch the same PointMass within a batch, we eliminate the need for expensive atomic operations and ensure thread safety.
 
-#### 3.4 Parallel Performance Results
+#### 6.3.4 Parallel Performance Results
 
 By applying Graph Coloring to the XPBD solver, the constraint projection phase—the most expensive part of the simulation—saw a massive performance gain.
 
