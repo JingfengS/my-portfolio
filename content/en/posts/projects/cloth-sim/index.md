@@ -35,7 +35,7 @@ The true technical depth of this project lies in the **External Exploration** ph
 - **Memory Management**: Excessive **heap allocation overhead** during spatial hash construction.
 - **Data Locality**: High **cache miss rates** during spatial map traversal for self-collision detection.
 
-3. **Optimization Strategies (16.7% Aggregate Speedup)**:
+3. **Optimization Strategies (16.3% Aggregate Speedup)**:
 
 - **Multi-threading**: Integrated **OpenMP** to parallelize wind force accumulation and self-collision impulse resolution.
 - **Cache-Friendly Data Structures**: Replaced `std::unordered_map` with a **Flat Spatial Grid** (a sorted `std::vector`). This approach utilizes a contiguous memory block to drastically reduce cache misses and eliminate per-frame heap allocations.
@@ -56,7 +56,7 @@ The true technical depth of this project lies in the **External Exploration** ph
 ## Part 1: Mass-Spring System
 
 In this part, I implemented the physical construction of the cloth using a **mass-spring system**. The process involved two main steps:
-generating a grid of `PointMass` objects and connecting them with `Spring` contraints to simulate the physical properties of the fabric.
+generating a grid of `PointMass` objects and connecting them with `Spring` constraints to simulate the physical properties of the fabric.
 
 ### 1.1 Grid Construction
 
@@ -84,10 +84,10 @@ The following images show the wireframe structure of `scene/pinned2.json`. By to
 
 <div class="flex flex-row gap-4">
     <div class="flex-1">
-        {{< figure src="no_sheering.png" caption="**Fig 1:** No Sheering Cloth" alt="Result 1" >}}
+        {{< figure src="no_sheering.png" caption="**Fig 1:** No Shearing Cloth" alt="Result 1" >}}
     </div>
     <div class="flex-1">
-        {{< figure src="sheering.png" caption="**Fig 2:** Only Sheering Cloth" alt="Result 2" >}}
+        {{< figure src="sheering.png" caption="**Fig 2:** Only Shearing Cloth" alt="Result 2" >}}
     </div>
     <div class="flex-1">
         {{< figure src="all.png" caption="**Fig 3:** All Constraints Cloth" alt="Result 3" >}}
@@ -150,11 +150,11 @@ Below is the shaded cloth from `scene/pinned4.json` with `ks=1500`, `density=15g
 
 ## Part 3: Handling collisions with other objects
 
-In this part, I implemented the interaction between the cloth and other 3D primitives (spheres and planes) by calculating sollision responses that push the cloth's point masses back to the surface of the object.
+In this part, I implemented the interaction between the cloth and other 3D primitives (spheres and planes) by calculating collision responses that push the cloth's point masses back to the surface of the object.
 
 ### 3.1 Implementation details
 
-- **Sphere Collision:** For each point mass, I check if its distance from the sphere's origin is less than or equal to the radius. If a collision is detected, I calculate the **tangent point** on the sphere's surface by extending the vector from the origin through the current position. THe point mass is then moved toward this tangent vector using a correction vector originating from its `last_position`, scaled by `(1 - friction)`.
+- **Sphere Collision:** For each point mass, I check if its distance from the sphere's origin is less than or equal to the radius. If a collision is detected, I calculate the **tangent point** on the sphere's surface by extending the vector from the origin through the current position. The point mass is then moved toward this tangent vector using a correction vector originating from its `last_position`, scaled by `(1 - friction)`.
 
 - **Plane Collision:** I use the dot product of the point mass's position (relative to a point on the plane) and the plane's normal to determine if the cloth has crossed from one side to the other. Upon crossing, I calculate the intersection point (tangent point) and offset it slightly by `SURFACE_OFFSET` to prevent the cloth from getting stuck inside the plane. The final position is updated similarly using a friction-scaled correction vector from the `last_position`.
 
@@ -176,7 +176,7 @@ Varing the spring constant `ks` significantly alters the cloth's stiffness and h
 
 ### 3.3 Plane Collision Example
 
-The following image show the shaded cloth lying at rest on the plance. The collision response ensures the cloth remains on the surface without clipping.
+The following image show the shaded cloth lying at rest on the plane. The collision response ensures the cloth remains on the surface without clipping.
 
 <div style="width: 50%; margin: 0 auto;">
     {{< figure src="plane.png" caption="**Fig 1:** Shaded cloth lying at rest on the plane." alt="Result 1" >}}
@@ -208,9 +208,9 @@ The sequence below captures the cloth as it falls, makes initial contact with it
     </div>
 </div>
 
-### 4.3Parameter Analysis
+### 4.3 Parameter Analysis
 
-- **Density:** Increasing density makes the cloth heavier. Higher ensity leads to more compression and more frequent self-collisions.
+- **Density:** Increasing density makes the cloth heavier. Higher density leads to more compression and more frequent self-collisions.
 - **Spring Constant (ks):** A higher `ks` increases the cloth's resistance to bending and stretching. When `ks` is high, the cloth maintains larger, more open folds and resists overlapping.
 
 <div class="flex flex-row gap-4">
@@ -325,7 +325,7 @@ $$
 - **Procedural Turbulence:** To simulate organic, gusty wind, I used a multi-frequency sine function that modulates the force based on space and time. This prevents the cloth from moving too uniformly by summing waves with different amplitudes and frequencies:
 $$T(s, t) = \sum \alpha_i \sin(\omega_i s + \phi_i t)$$
 
-This creates a pseudo-random scaler \(T\) used to perturb the base force by up to \(30\%\):
+This creates a pseudo-random scalar \(T\) used to perturb the base force by up to \(30\%\):
 $$\mathbf{F}_{final} = \mathbf{F}_{drag} \cdot (1.0 + 0.3 T)$$
 
 {{< video src="xpbd-better.webm" autoplay="true" loop="true" muted="true" preload="auto" playsinline="true" caption="**Fig1:** Wind Simulation" >}}
@@ -351,8 +351,7 @@ The results show that self_collision and wind are the most time-consuming functi
 
 To achieve real-time performance, I implemented several hardware-level optimizations focusing on parallel throughput and memory locality:
 
-- **Parallel Computing with OpenMP:** I parallelized the force calculations and constraint projections. By using #pragma omp parallel for with thread-safe atomic operations for wind forces, I significantly reduced the per-step computation time across multiple CPU cores.Data 
-
+- **Parallel Computing with OpenMP:** I parallelized the force calculations and constraint projections. By using #pragma omp parallel for with thread-safe atomic operations for wind forces, I significantly reduced the per-step computation time across multiple CPU cores.
 - **Locality & Spatial Hashing:** I replaced the traditional `std::unordered_map` with a `Sorted Continuum Data Structure`. By flattening the spatial map into a single contiguous std::vector and sorting it by hash value, I minimized Cache Misses. This allows the CPU's prefetcher to efficiently load neighboring particles during collision detection, as they are now stored in adjacent memory addresses.
 
 | Physics Module          | Baseline (Avg ms/step) | Optimized (Avg ms/step) | Performance Gain |
@@ -415,7 +414,7 @@ Though XPBD is more energy conserving, it is also more expensive to compute. At 
 
 #### 6.3.3 Optimization
 
-n the XPBD solver, the most significant bottleneck is the iterative constraint projection. However, simply wrapping the loop with #pragma omp parallel for leads to Data Races.
+In the XPBD solver, the most significant bottleneck is the iterative constraint projection. However, simply wrapping the loop with #pragma omp parallel for leads to Data Races.
 
 The Challenge: In a cloth mesh, a single PointMass is typically shared by multiple constraints (Structural, Shearing, and Bending springs). If two threads attempt to modify the predicted_position of the same particle simultaneously, the writes will conflict, leading to non-deterministic behavior, physical "jittering," or even system crashes.
 
@@ -439,3 +438,33 @@ By applying Graph Coloring to the XPBD solver, the constraint projection phase�
 
 **Analysis:**
 The parallelization reduced the constraint solving time by nearly 64%. While the Self_Collision overhead remains constant (as it was already optimized via spatial hashing), the overall frame budget is now much healthier, bringing the high-density \(128 \times 128\) simulation significantly closer to real-time interactive rates on the CPU.
+
+## Part 7: Final Reflection & Future Work
+
+This project was more than an exercise in cloth simulation; it was a deep dive into the constraints of real-time physics engineering. Transitioning from a basic Verlet integrator to a parallelized XPBD solver highlighted the critical balance between physical accuracy and hardware efficiency. By achieving a **2.77x speedup** in the constraint solver and reducing the total step time by **47.3%**, I was able to push a high-density 128x128 mesh to the limits of CPU performance.
+
+However, the journey from a 1.9ms simulation step (30 steps per frame, total 57ms) to a production-ready 60 FPS frame—which requires multiple sub-steps to maintain stability—reveals several avenues for future optimization:
+
+**1. Architectural Shift: From AoS to SoA**
+
+The current framework relies on an Array of Structures (AoS), which, while intuitive, is a significant bottleneck for modern hardware.
+
+- **SIMD Bottleneck:** AoS layouts make efficient SIMD (Single Instruction, Multiple Data) vectorization nearly impossible, as data for a single operation is not contiguous in memory.
+
+- **Cache Locality:** Transitioning to a Structure of Arrays (SoA) approach would allow for much higher cache hit rates and enable the use of AVX/SSE instructions to process multiple vertices in a single clock cycle.
+
+**2. GPU Acceleration**
+
+In the modern industry, cloth simulation is a massively parallel problem best suited for the GPU.
+- **Throughput:** Due to hardware limitations during my exchange program in Japan, I focused on CPU-based optimization.
+- **Next Steps:** Upon returning to China and my desktop workstation, I plan to port this solver to CUDA or Compute Shaders. Moving the \(O(N^2)\) complexity of self-collision and iterative constraints to the GPU's thousands of cores would likely reduce the ~57ms frame time to sub-millisecond levels.
+
+**3. Exploring Advanced Solvers**
+
+While XPBD is the current industry standard for stability, the research field is moving rapidly.
+
+- **Implicit Integration:** I am eager to explore Projective Dynamics (PD) or Implicit Euler solvers seen in recent SIGGRAPH papers.
+
+- **Accuracy vs. Speed:** Comparing the convergence rates of PD against XPBD would provide deeper insight into how different mathematical formulations impact the "feel" and "stretchiness" of virtual fabrics.
+
+This project has solidified my passion for low-level systems engineering. It has taught me that true performance isn't found in a single "silver bullet" algorithm, but in the meticulous harmony between mathematical theory and hardware awareness.
