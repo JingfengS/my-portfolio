@@ -102,7 +102,7 @@ The detailed steps are as follows:
 3. **Binning Strategy:** To avoid expensive \(O(N^2)\) cost of testing every possible split, I implemented the "Binning" approximation. I divide the chosen axis into **16 uniform bins** and then iterate through all primitives, calculate which bin their centroid falls into, and update the bounding box and count for each bin.
 
 4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split plances between these buckets. The SAH cost function is:
-   $$ C = C*{trav} + \frac{S_A}{S*{total}} N*{A} C*{isect} + \frac{S*B}{S*{total}} N*{B} C*{isect} $$
+   $$ C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B C_{isect} $$
    where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
 
 5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
