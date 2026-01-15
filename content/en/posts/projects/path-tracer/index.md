@@ -38,15 +38,15 @@ Beyond the core requirements, I focused heavily on **acceleration structure effi
 
 ## Part 1: Ray Generation and Scene Intersection
 
-### 1.1 Ray Generation Pipline
+### 1.1 Ray Generation Pipeline
 
 The ray generation process bridges the 2D image space and the 3D world space. The goal is to take a normalized image coordinate \( (x, y) \)--where \((0, 0)\) is the bottom-left and \((1, 1)\) is the top-right--and transform it into a ray originating from the camera and shooting into the scene.
 
 My implementation in `Camera::generate_ray` follows these steps:
 
-1. **Camera Space Transformation:** We define a virtual sensor place at \(Z = -1\) in camera space. The size of this sensor is determined by the horizontal (_hFov_) and vertical (_vFov_) fields of view. I calculated the sensor dimensions using the tangent of half the FOV angles.
+1. **Camera Space Transformation:** We define a virtual sensor plane at \(Z = -1\) in camera space. The size of this sensor is determined by the horizontal (_hFov_) and vertical (_vFov_) fields of view. I calculated the sensor dimensions using the tangent of half the FOV angles.
 
-2. **Coordinate Mapping:** Since the input coordinated \((x, y)\) are normalized to \([0, 1]\), I mapped them to the sensor's coordinate system, which ensures he center of the image \((0.5, 0.5)\) aligns with the camera's optical axis \((0, 0, -1)\).
+2. **Coordinate Mapping:** Since the input coordinates \((x, y)\) are normalized to \([0, 1]\), I mapped them to the sensor's coordinate system, which ensures he center of the image \((0.5, 0.5)\) aligns with the camera's optical axis \((0, 0, -1)\).
 
 ```cpp
 // Transform normalized coordinates to sensor space
@@ -54,7 +54,7 @@ double sensor_x = (2 * x - 1) * tan(radians(hFov) / 2);
 double sensor_y = (2 * y - 1) * tan(radians(vFov) / 2);
 ```
 
-3. **World Space Transformation:** The ray's direction vector in camera space is \((sensor_x, sensor_y, -1)\). I then multiplied this vector by the camera-to-world retation matrix(`c2w`) to orient the ray correctly in the world.
+3. **World Space Transformation:** The ray's direction vector in camera space is \((sensor_x, sensor_y, -1)\). I then multiplied this vector by the camera-to-world rotation matrix(`c2w`) to orient the ray correctly in the world.
 
 4. **Ray Creation:** Finally, the ray is created with its origin at the camera's position and the calculated normalized direction. I also initialized the ray's `min_t` and `max_t` using the near and far clipping planes.
 
@@ -91,7 +91,7 @@ Below are images of several simple `.dae` files rendered with normal shading to 
 
 ### 2.1 BVH Construction Algorithm
 
-My BVH construction algorithm is a recursive process (implemented using std::stack and loop) that organizes scene primitives into to a binary tree structure for efficient ray intersection. The core function, `construct_bvh`, takes a list of primitives and recursively divides them until a leaf node is reached.
+My BVH construction algorithm is a recursive process (implemented using std::stack and loop) that organizes scene primitives into a binary tree structure for efficient ray intersection. The core function, `construct_bvh`, takes a list of primitives and recursively divides them until a leaf node is reached.
 
 The detailed steps are as follows:
 
@@ -101,13 +101,13 @@ The detailed steps are as follows:
 
 3. **Binning Strategy:** To avoid expensive \(O(N^2)\) cost of testing every possible split, I implemented the "Binning" approximation. I divide the chosen axis into **16 uniform bins** and then iterate through all primitives, calculate which bin their centroid falls into, and update the bounding box and count for each bin.
 
-4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split plances between these buckets. The SAH cost function is:
+4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split planes between these buckets. The SAH cost function is:
 
-    $$C = C*{trav} + \frac{S_A}{S*{total}} N*A C*{isect} + \frac{S*B}{S*{total}} N*B C*{isect}$$
+    $$C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B C_{isect}$$
 
     where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
 
-5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
+5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually worth it compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
 
 <div class="flex flex-row gap-4">
     <div class="flex-1">
@@ -123,7 +123,7 @@ The detailed steps are as follows:
 
 ### 2.2 Results: Rendering Large Models
 
-With BVH acceleration, I can now render complex geometries with tens of thousands of triangles, which would have been impossible (or infinitely slow) with the naive implementation. Blow are images of complex `.dae` files rendered with normal shading.
+With BVH acceleration, I can now render complex geometries with tens of thousands of triangles, which would have been impossible (or infinitely slow) with the naive implementation. Below are images of complex `.dae` files rendered with normal shading.
 
 <div class="flex flex-row gap-4">
     <div class="flex-1">
@@ -147,12 +147,12 @@ I compared the rendering performance of the naive and BVH-accelerated implementa
 The results demonstrate a drastic improvement in rendering
 speed. Without BVH, the intersection complexity is \(O(N)\) per
 ray. For models like the Cow or Beetle, this is noticeably
-slow. With BVH, the complexity drops to \(O(\log N)\) as rays
+slow. With BVH, the complexity drops to \(O(\log N)\) on average as rays
 only traverse relevant nodes of the tree.
-<br>
+
 On the other hand, I found that in BVH, the render time does not
 increase significantly with the number of triangles, showing
-that **the bottle neck has shifted from CPU computing
+that **the bottleneck has shifted from CPU computing
 power to memory bandwidth and cache efficiency**,
 which is a direction that can be further optimized in future
 work.
@@ -165,7 +165,7 @@ In this part, I implemented two distinct algorithms for estimating direct illumi
 
 **Uniform Hemisphere Sampling:**
 
-In the `estimate_direct_lighting_hemisphere` function, I estimate the radiance at an intersection point by uniformly sampling directions over the heimisphere:
+In the `estimate_direct_lighting_hemisphere` function, I estimate the radiance at an intersection point by uniformly sampling directions over the hemisphere:
 
 - **Sampling Process:** I used the `hemisphereSampler` to generate a random direction in object space, and then transformed it to world space using the `o2w` matrix constructed from the surface normal.
 
@@ -181,9 +181,9 @@ In the `estimate_direct_lighting_importance` function, I sample directions direc
 
 - **Iterating lights:** The function iterates through all light sources in `scene->lights`. For delta lights (like point lights), only one sample is taken; for area lights, `ns_area_light` samples are taken.
 
-- Visibility Testing:\*\* For each sampled direction, a shadow ray is cast. The `max_t` of this ray is set to `distToLight - EPS_D` to ensure the ray does not erroneously intersect with the light source itself.
+- **Visibility Testing:** For each sampled direction, a shadow ray is cast. The `max_t` of this ray is set to `distToLight - EPS_D` to ensure the ray does not erroneously intersect with the light source itself.
 
-- **Occlusion Check:** I used `bvh->has_intersection(shadow_ray)` for an efficient visibility check. If the path is unoccluded, the contribution of the light is added based on the lights's PDF, the BSDF, and the cosine term.
+- **Occlusion Check:** I used `bvh->has_intersection(shadow_ray)` for an efficient visibility check. If the path is unoccluded, the contribution of the light is added based on the light's PDF, the BSDF, and the cosine term.
 
 ### 3.2 Sampling Results Comparison
 
@@ -374,7 +374,7 @@ The profile revealed a stark reality: the time distribution across the image is 
 
 As visualized by the Tray profiler, not all pixels are created equal. To optimize our compute budget, I implemented Adaptive Sampling. Instead of forcing 1024 samples on every pixel, we monitor the statistical convergence of a pixel as we render.
 
-The Mathematics of ConfidenceFor every \(n\) samples, we calculate the sample mean \(\mu\) and the standard deviation \(\sigma\). We want to ensure that with 95% confidence, the actual radiance lies within a small error margin \(I\) of our estimate.
+The Mathematics of Confidence: For every \(n\) samples, we calculate the sample mean \(\mu\) and the standard deviation \(\sigma\). We want to ensure that with 95% confidence, the actual radiance lies within a small error margin \(I\) of our estimate.
 
 The convergence criterion is defined as:
 
@@ -411,7 +411,7 @@ The heatmaps below illustrate the sampling density. In the "After" map (Fig 2), 
 
 ### 5.4 More BSDFs
 
-To push the renderer further, I extended the system to support a variety of physically-based materials, including Microfacet BSDFs (for metals like copper), Glass, and Refraction. These materials highlight the robustness of the global illumination and adaptive sampling systems.
+To push the renderer further, I extended the system to support a variety of physically-based materials, including Microfacet BSDFs (Beckmann and GGX), Glass, and Refraction. These materials highlight the robustness of the global illumination and adaptive sampling systems.
 
 Here is a gallery of the rendered results with their heat maps:
 
@@ -441,3 +441,18 @@ Here is a gallery of the rendered results with their heat maps:
     </div>
 </div>
 </div>
+
+## Conclusion & Future Reflections
+
+Completing this Path Tracer marks a significant milestone in my journey through computer graphics. There is a unique poeticism in rendering these scenes—from the classic Cornell Box to the intricate reflections of a Copper Dragon—while watching the winter season conclude in Osaka. Achieving a 2.25x speedup through SAH and Adaptive Sampling wasn't just about making code run faster; it was about understanding the deep synergy between physical mathematics and C++ performance engineering.
+
+**Future Work: The Road to Real-Time**
+
+While the current CPU-based renderer is robust, it is only the beginning. I am planning on exploring the following frontiers in the near future:
+
+- **GPU Acceleration (CUDA):** Moving the BVH traversal and intersection logic to the GPU is the next logical step. By leveraging parallel compute kernels, I aim to transform this offline renderer into a real-time interactive engine.
+- **AI-Driven Denoising:** High-quality path tracing is still computationally expensive. I plan to integrate AI denoisers (such as NVIDIA OptiX or Intel Open Image Denoise) to produce clean, production-ready images at much lower $SPP$ (Samples Per Pixel) counts.
+
+**Final Thoughts**
+
+This project has reinforced my desire to bridge the gap between academic theory and industry-level performance. As I prepare to return to China and transition into the professional world, I am incredibly excited to finally get my hands on my new RTX 5070 Ti build. It will be the perfect playground to explore state-of-the-art AI denoising techniques and GPU acceleration (CUDA/Metal) as I push my rendering research even further. This project was just the beginning of my journey into the pixels.
