@@ -383,3 +383,61 @@ $$I = 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \text{maxTolerance} \cdot \mu$$
 Where \(1.96\) is the z-score for a 95% confidence interval. When this condition is met, the pixel has likely converged, and we can safely terminate the sampling loop early.
 
 Implementation Detail: To keep the performance overhead low, I only check for convergence every `samplesPerBatch` (32 by default) iterations. This prevents the square root and variance calculations from bottlenecking the core ray-tracing loop.
+
+### 5.2 Performance Analysis
+
+By implementing adaptive sampling, we can significantly reduce the rendering time for images with large areas of uniform color (like the walls of the Cornell Box), while still maintaining high quality in complex areas (like the bunny's surface). 
+
+For `CBbunny.dae` with `max_ray_depth = 32`, `samplesPerPixel = 1024`, and `light_ray_per_sample = 4`, adaptive sampling reduces the rendering time from 248.2378s to 110.7405s. For profiling results, you can look at this table:
+
+| Region Type | Before Optimization | After Optimization | Speedup Factor |
+| :--- | :--- | :--- | :--- |
+| **Simple Areas (e.g., Walls)** | 20 ms / tile | 3 ms / tile | ~6.67x |
+| **Complex Areas (e.g., Shadows)** | 1,000 ms / tile | ~630 ms / tile | ~1.59x |
+| **Total Render Time (CBbunny)** | 248.2 s | 110.7 s | 2.24x |
+
+### 5.3 Visual Comparison
+
+The heatmaps below illustrate the sampling density. In the "After" map (Fig 2), blue regions represent pixels that converged early, while red regions indicate areas where the full 1024 samples were necessary.
+
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_32_rate.png" caption="**Fig 1:** Heat Map before adaptive sampling" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_32_a_rate.png" caption="**Fig 2:** Heat Map after adaptive sampling" alt="Result 2" >}}
+    </div>
+</div>
+
+### 5.4 More BSDFs
+
+To push the renderer further, I extended the system to support a variety of physically-based materials, including Microfacet BSDFs (for metals like copper), Glass, and Refraction. These materials highlight the robustness of the global illumination and adaptive sampling systems.
+
+Here is a gallery of the rendered results with their heat maps:
+
+<div class="more-bsdfs">
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="dragon_cu.png" caption="**Fig 1:** Dragon with copper material" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="dragon_cu_rate.png" caption="**Fig 2:** Heat Map of dragon with copper material" alt="Result 2" >}}
+    </div>
+</div>
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="bunny_cu.png" caption="**Fig 3:** Bunny with copper material" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="bunny_cu_rate.png" caption="**Fig 4:** Heat Map of bunny with copper material" alt="Result 2" >}}
+    </div>
+</div>
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="gems_1024_4_a.png" caption="**Fig 5:** Gems with glass material" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="gems_1024_4_rate.png" caption="**Fig 6:** Heat Map of gems with glass material" alt="Result 2" >}}
+    </div>
+</div>
+</div>
