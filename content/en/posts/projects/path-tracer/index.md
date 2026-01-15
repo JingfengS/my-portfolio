@@ -426,7 +426,7 @@ Here is a gallery of the rendered results with their heat maps:
 </div>
 <div class="flex flex-row gap-4">
     <div class="flex-1">
-        {{< figure src="bunny_cu.png" caption="**Fig 3:** Bunny with copper material" alt="Result 1" >}}
+        {{< figure src="featured.png" caption="**Fig 3:** Bunny with copper material" alt="Result 1" >}}
     </div>
     <div class="flex-1">
         {{< figure src="bunny_cu_rate.png" caption="**Fig 4:** Heat Map of bunny with copper material" alt="Result 2" >}}
