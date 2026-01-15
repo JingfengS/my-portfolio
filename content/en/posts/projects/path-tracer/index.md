@@ -30,9 +30,9 @@ Beyond the core requirements, I focused heavily on **acceleration structure effi
 
 - **Global Illumination:** Implemented a full path tracing loop that accounts for indirect lighting. I used **Russian Roulette** as a stochastic termination criterion, ensuring the estimator remains unbiased while keeping the computation efficient.
 
-- **Profiling with `tray`/Tracy:** Used instrumentation and sampling profilers to visualize thread utilization and identify bottlenecks.
-
 - **Multithreading:** Leveraged a thread-pool architecture to parallelize the rendering process across image tiles, ensuring near-linear speedup on multi-core processors.
+
+- **Profiling with `tray`/Tracy:** Used instrumentation and sampling profilers to visualize thread utilization and identify bottlenecks.
 
 - **Adaptive Sampling:** Integrated a statistical confidence-based sampling method. By tracking the mean and variance of pixel radiance, the renderer dynamically stops sampling converged pixels, focusing computational power on high-variance (noisy) regions.
 
@@ -102,7 +102,7 @@ The detailed steps are as follows:
 3. **Binning Strategy:** To avoid expensive \(O(N^2)\) cost of testing every possible split, I implemented the "Binning" approximation. I divide the chosen axis into **16 uniform bins** and then iterate through all primitives, calculate which bin their centroid falls into, and update the bounding box and count for each bin.
 
 4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split plances between these buckets. The SAH cost function is:
-   $$ C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B C_{isect} $$
+   $$ C = C*{trav} + \frac{S_A}{S*{total}} N*A C*{isect} + \frac{S*B}{S*{total}} N*B C*{isect} $$
    where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
 
 5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
@@ -208,14 +208,148 @@ To demonstrate the effect of importance sampling in rendering soft shadows, I re
 
 **Analysis:**
 As the number of light rays increases
-from 1 to 64, the noise (graininess) in the soft shadow regions
-is drastically reduced. At \(l=1\), the shadows appear as a
-scattered collection of dots. By \(l=64\), the gradient of the
-soft shadow becomes very smooth as the Monte Carlo estimator
-gains more samples. Because we are sampling the lights directly,
-we achieve relatively stable results even with a low number of
+from 1 to 64, the noise (graininess) in the soft shadow regions is drastically reduced. At \(l=1\), the shadows appear as a scattered collection of dots. By \(l=64\), the gradient of the soft shadow becomes very smooth as the Monte Carlo estimator gains more samples. Because we are sampling the lights directly, we achieve relatively stable results even with a low number of
 samples per pixel.
 
 ## Part 4: Global Illumination
 
+In this section, I transitioned from direct lighting to a full **Global Illumination** (GI) renderer. By simulating multiple bounces of light, we can capture complex phenomena like color bleeding and soft indirect shadows, which are essential for photorealism.
 
+### 4.1 Indirect Lighting Implementation
+
+Instead of a simple recursive call, I implemented an iterative approach to handle path tracing, which is more memory-efficient and avoids stack overflow for high ray depths.
+
+1. **Direct Contribution:** At each intersection, we always calculate the `one_bounce_radiance` (direct lighting) and add it to our accumulated radiance, multiplied by the current `throughput`.
+
+2. **Throughput Tracking:** We maintain a `throughput` vector (starting at \([1, 1, 1]\)). Every time a ray bounces, we update it:
+   $$ \text{throughput} \leftarrow \text{throughput} \times \frac{f_r \cdot \cos \theta}{\text{PDF}} $$
+
+3. **Russian Roulette:** To ensure the algorithm terminates while remaining unbiased, I used a termination probability of \(0.65\). If the ray continues, we scale the throughput by \(\frac{1}{0.65}\) to compensate for the lost energy of terminated paths.
+
+4. **Sampling the Next Ray:** We use `isect.bsdf->sample_f` to pick a new direction based on the material's properties, create a new ray, and continue the loop until `max_ray_depth` is reached or Russian Roulette terminates the path.
+
+### 4.2 Direct vs. Indirect: A Visual Comparison
+
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_1.png" caption="**Fig 1:** Direct Lighting" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_100_Russo.png" caption="**Fig 2:** Indirect Lighting" alt="Result 2" >}}
+    </div>
+</div>
+
+**Observation:** Direct lighting provides the primary structure and sharp shadows. Indirect lighting "fills in" the darkness, providing the soft glow and the subtle transfer of color (e.g., the red and green tints on the white walls and bunny).
+
+### 4.3 Analyzing Light Bounces (m-th bounce)
+
+By setting `isAccumBounces = false`, we can isolate exactly what the n-th bounce of light looks like. Here is a breakdown for `CBbunny.dae` (*Russian Roulette Disabled*):
+
+- **0th Bounce:** Only the light source itself is visible.
+- **1st Bounce:** Standard direct lighting.
+- **2nd Bounce:** This captures light that hits a surface, bounces once, and then hits the bunny. You can see the bottom of the bunny is lit by the floor.
+- **3rd Bounce and More:** Even more subtle. This is light that has bounced twice before hitting the bunny. It contributes to the "inner" soft shadows and further color integration.
+
+<div class="light-bounce-m">
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_0.png" caption="**Fig 1:** 0th Bounce" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_1.png" caption="**Fig 2:** 1st Bounce" alt="Result 2" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_2.png" caption="**Fig 3:** 2nd Bounce" alt="Result 2" >}}
+    </div>
+</div>
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_3.png" caption="**Fig 4:** 3rd Bounce" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_4.png" caption="**Fig 5:** 4th Bounce" alt="Result 2" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_5.png" caption="**Fig 6:** 5th Bounce" alt="Result 2" >}}
+    </div>
+</div>
+</div>
+
+### 4.4 Accumulated Bounces vs. Max Ray Depth
+
+When we enable `isAccumBounces = true`, we can see the image quality evolve as we allow light to bounce more times (_Russian Roulette Disabled_). 
+
+<div class="light-bounce-full">
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_0.png" caption="**Fig 1:** 0th Bounce" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_1.png" caption="**Fig 2:** 1st Bounce" alt="Result 2" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_2_full.png" caption="**Fig 3:** 2nd Bounce" alt="Result 2" >}}
+    </div>
+</div>
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_3_full.png" caption="**Fig 4:** 3rd Bounce" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_4_full.png" caption="**Fig 5:** 4th Bounce" alt="Result 2" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_1024_4_5_full.png" caption="**Fig 6:** 5th Bounce" alt="Result 2" >}}
+    </div>
+</div>
+</div>
+
+### 4.5 Multithreading
+
+For a path tracer handling over 1,000 samples per pixel, multithreading is not just a feature—it is a necessity. I implemented a thread-pool architecture that partitions the image into independent tiles, allowing multiple CPU cores to process the scene in parallel.
+
+Initially, I used a \(32 \times 32\) pixel tile size. However, through testing, I identified a common bottleneck in parallel rendering: Workload Imbalance. In a typical scene, some tiles contain only the black background (very fast to compute), while others contain the complex geometry of the bunny with multiple light bounces (very slow). Large tiles exacerbate this imbalance, as a single "heavy" tile can keep one thread busy long after others have finished.
+
+By reducing the tile size to \(16 \times 16\), I achieved better granularity. This allowed the 8 threads to pick up new tasks more frequently, ensuring a more even distribution of labor. This simple change alone reduced the render time of CBbunny.dae from 270s to 240s.
+
+### 4.6 Russian Roulette: Efficiency vs. Depth
+
+Using Russian Roulette allows us to set a high `max_ray_depth` (like 100) without the renderer taking forever. Because most rays lose energy after a few bounces, the probability-based termination kills "weak" rays early while allowing "strong" rays to explore deep paths.
+
+<div style="width: 59%; margin: 0 auto;">
+    {{< figure src="CBbunny_1024_4_100_Russo.png" caption="**Fig 1:** Russian Roulette: 248.2378s to render with 8 threads." alt="Result 1" >}}
+</div>
+
+
+### 4.7 Sampling Rate Comparison
+
+Finally, we look at the effect of Sample-Per-Pixel (SPP) on noise. Even with importance sampling, low sample rates produce significant noise.
+
+<div class="light-bounce-spp">
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_sample_1_light4.png" caption="**Fig 1:** 1 Sample" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_sample_16_light4.png" caption="**Fig 2:** 16 Samples" alt="Result 2" >}}
+    </div>
+</div>
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="CBbunny_sample_64_light4.png" caption="**Fig 4:** 64 Samples" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="CBbunny_sample_1024_light4.png" caption="**Fig 5:** 1024 Samples" alt="Result 2" >}}
+    </div>
+</div>
+</div>
+
+### 4.8 Performance Analysis
+
+Even with optimized multithreading, a high-quality render still takes significant time. To dig deeper into the remaining bottlenecks, I used the Tray profiler to visualize the rendering process.
+
+The profile revealed a stark reality: the time distribution across the image is extremely uneven. As seen in Fig, some tiles take orders of magnitude longer (above 1s) to converge than others (about 20ms). This is because high-variance areas (like the soft shadows under the bunny or the Cornell Box corners) require every single one of the 1024 samples to reach a clean state, whereas the flat surfaces of the walls might converge much earlier.
+
+<div style="width: 95%; margin: 0 auto;">
+    {{< figure src="profile.png" caption="**Fig:** Render time for each 16x16 tile with 1024 SPP and 4 light rays per sample." alt="Result 1" >}}
+</div>
