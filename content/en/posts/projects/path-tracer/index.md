@@ -102,10 +102,24 @@ The detailed steps are as follows:
 3. **Binning Strategy:** To avoid expensive \(O(N^2)\) cost of testing every possible split, I implemented the "Binning" approximation. I divide the chosen axis into **16 uniform bins** and then iterate through all primitives, calculate which bin their centroid falls into, and update the bounding box and count for each bin.
 
 4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split plances between these buckets. The SAH cost function is:
+
    $$ C = C*{trav} + \frac{S_A}{S*{total}} N*A C*{isect} + \frac{S*B}{S*{total}} N*B C*{isect} $$
+
    where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
 
 5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
+
+<div class="flex flex-row gap-4">
+    <div class="flex-1">
+        {{< figure src="sah-1.png" caption="**Fig 1:** SAH Root" alt="Result 1" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="sah-2.png" caption="**Fig 2:** SAH Child" alt="Result 2" >}}
+    </div>
+    <div class="flex-1">
+        {{< figure src="sah-3.png" caption="**Fig 3:** SAH Grandchild" alt="Result 2" >}}
+    </div>
+</div>
 
 ### 2.2 Results: Rendering Large Models
 
@@ -243,7 +257,7 @@ Instead of a simple recursive call, I implemented an iterative approach to handl
 
 ### 4.3 Analyzing Light Bounces (m-th bounce)
 
-By setting `isAccumBounces = false`, we can isolate exactly what the n-th bounce of light looks like. Here is a breakdown for `CBbunny.dae` (*Russian Roulette Disabled*):
+By setting `isAccumBounces = false`, we can isolate exactly what the n-th bounce of light looks like. Here is a breakdown for `CBbunny.dae` (_Russian Roulette Disabled_):
 
 - **0th Bounce:** Only the light source itself is visible.
 - **1st Bounce:** Standard direct lighting.
@@ -277,7 +291,7 @@ By setting `isAccumBounces = false`, we can isolate exactly what the n-th bounce
 
 ### 4.4 Accumulated Bounces vs. Max Ray Depth
 
-When we enable `isAccumBounces = true`, we can see the image quality evolve as we allow light to bounce more times (_Russian Roulette Disabled_). 
+When we enable `isAccumBounces = true`, we can see the image quality evolve as we allow light to bounce more times (_Russian Roulette Disabled_).
 
 <div class="light-bounce-full">
 <div class="flex flex-row gap-4">
@@ -319,7 +333,6 @@ Using Russian Roulette allows us to set a high `max_ray_depth` (like 100) withou
 <div style="width: 59%; margin: 0 auto;">
     {{< figure src="CBbunny_1024_4_100_Russo.png" caption="**Fig 1:** Russian Roulette: 248.2378s to render with 8 threads." alt="Result 1" >}}
 </div>
-
 
 ### 4.7 Sampling Rate Comparison
 
