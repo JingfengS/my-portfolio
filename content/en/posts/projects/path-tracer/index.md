@@ -103,9 +103,9 @@ The detailed steps are as follows:
 
 4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split plances between these buckets. The SAH cost function is:
 
-   $$ C = C*{trav} + \frac{S_A}{S*{total}} N*A C*{isect} + \frac{S*B}{S*{total}} N*B C*{isect} $$
+    $$C = C*{trav} + \frac{S_A}{S*{total}} N*A C*{isect} + \frac{S*B}{S*{total}} N*B C*{isect}$$
 
-   where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
+    where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
 
 5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
 
@@ -236,7 +236,8 @@ Instead of a simple recursive call, I implemented an iterative approach to handl
 1. **Direct Contribution:** At each intersection, we always calculate the `one_bounce_radiance` (direct lighting) and add it to our accumulated radiance, multiplied by the current `throughput`.
 
 2. **Throughput Tracking:** We maintain a `throughput` vector (starting at \([1, 1, 1]\)). Every time a ray bounces, we update it:
-   $$ \text{throughput} \leftarrow \text{throughput} \times \frac{f_r \cdot \cos \theta}{\text{PDF}} $$
+
+    $$ \text{throughput} \leftarrow \text{throughput} \times \frac{f_r \cdot \cos \theta}{\text{PDF}} $$
 
 3. **Russian Roulette:** To ensure the algorithm terminates while remaining unbiased, I used a termination probability of \(0.65\). If the ray continues, we scale the throughput by \(\frac{1}{0.65}\) to compensate for the lost energy of terminated paths.
 
@@ -366,3 +367,19 @@ The profile revealed a stark reality: the time distribution across the image is 
 <div style="width: 95%; margin: 0 auto;">
     {{< figure src="profile.png" caption="**Fig:** Render time for each 16x16 tile with 1024 SPP and 4 light rays per sample." alt="Result 1" >}}
 </div>
+
+## Part 5: Adaptive Sampling
+
+### 5.1 Adaptive Sampling Walk Through
+
+As visualized by the Tray profiler, not all pixels are created equal. To optimize our compute budget, I implemented Adaptive Sampling. Instead of forcing 1024 samples on every pixel, we monitor the statistical convergence of a pixel as we render.
+
+The Mathematics of ConfidenceFor every \(n\) samples, we calculate the sample mean \(\mu\) and the standard deviation \(\sigma\). We want to ensure that with 95% confidence, the actual radiance lies within a small error margin \(I\) of our estimate.
+
+The convergence criterion is defined as:
+
+$$I = 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \text{maxTolerance} \cdot \mu$$
+
+Where \(1.96\) is the z-score for a 95% confidence interval. When this condition is met, the pixel has likely converged, and we can safely terminate the sampling loop early.
+
+Implementation Detail: To keep the performance overhead low, I only check for convergence every `samplesPerBatch` (32 by default) iterations. This prevents the square root and variance calculations from bottlenecking the core ray-tracing loop.
