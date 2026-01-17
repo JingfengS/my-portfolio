@@ -18,6 +18,9 @@ In this project, I first implemented a basic mass-spring cloth simulation system
 
 In this project, I initially developed a foundational cloth simulator based on a **Mass-Spring system**. This included implementing robust object-environment interactions and self-collision handling, complemented by a suite of custom **GLSL shaders** for realistic material rendering.
 
+> [!TIP]
+> Tip to Chinese readers: 这是一个技术细节较多的英文版。如果你希望快速了解项目，可以在页面顶端右上角切换语言。
+
 ### The Technical "Deep Dive"
 
 The true technical depth of this project lies in the **External Exploration** phase, where I transitioned from basic functional implementation to high-performance physical engineering:

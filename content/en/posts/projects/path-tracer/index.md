@@ -20,6 +20,9 @@ This project involves the implementation of a physically-based **Path Tracer** a
 
 Beyond the core requirements, I focused heavily on **acceleration structure efficiency** by implementing a Surface Area Heuristic (SAH) for BVH construction and conducted **deep performance profiling** to optimize the C++ rendering pipeline.
 
+> [!TIP]
+> Tip to Chinese readers: 这是一个技术细节较多的英文版。如果你希望快速了解项目，可以在页面顶端右上角切换语言。
+
 **Core Technical Features**
 
 - **Ray-Scene Intersection Engine:** Implemented highly optimized intersection primitives for triangles (using the Möller-Trumbore algorithm) and spheres, serving as the foundation for the entire visibility system.
@@ -35,6 +38,7 @@ Beyond the core requirements, I focused heavily on **acceleration structure effi
 - **Profiling with `tray`/Tracy:** Used instrumentation and sampling profilers to visualize thread utilization and identify bottlenecks.
 
 - **Adaptive Sampling:** Integrated a statistical confidence-based sampling method. By tracking the mean and variance of pixel radiance, the renderer dynamically stops sampling converged pixels, focusing computational power on high-variance (noisy) regions.
+
 
 ## Part 1: Ray Generation and Scene Intersection
 
@@ -103,9 +107,9 @@ The detailed steps are as follows:
 
 4. **Cost Evaluation:** I evaluate the SAH cost for the 15 possible split planes between these buckets. The SAH cost function is:
 
-    $$C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B C_{isect}$$
+   $$C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B C_{isect}$$
 
-    where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
+   where \(S\) represents surface area and \(N\) represents number of primitives count. I use efficient forward and backward scans (prefix/suffix sums) to compute the surface areas and counts for the left and right partitions in linear time.
 
 5. **Partitioning & Recursion:** After finding the split index with the minimum cost, I check if splitting is actually worth it compared to creating a leaf. If it is, I use `std::partition` with a lambda function to reorder the primitives in-place: those falling into buckets left of the split point move to the front, and the rest move to the back. Finally, I recursively construct the left and right children of the current node.
 
@@ -237,7 +241,7 @@ Instead of a simple recursive call, I implemented an iterative approach to handl
 
 2. **Throughput Tracking:** We maintain a `throughput` vector (starting at \([1, 1, 1]\)). Every time a ray bounces, we update it:
 
-    $$ \text{throughput} \leftarrow \text{throughput} \times \frac{f_r \cdot \cos \theta}{\text{PDF}} $$
+   $$ \text{throughput} \leftarrow \text{throughput} \times \frac{f_r \cdot \cos \theta}{\text{PDF}} $$
 
 3. **Russian Roulette:** To ensure the algorithm terminates while remaining unbiased, I used a termination probability of \(0.65\). If the ray continues, we scale the throughput by \(\frac{1}{0.65}\) to compensate for the lost energy of terminated paths.
 
@@ -386,15 +390,15 @@ Implementation Detail: To keep the performance overhead low, I only check for co
 
 ### 5.2 Performance Analysis
 
-By implementing adaptive sampling, we can significantly reduce the rendering time for images with large areas of uniform color (like the walls of the Cornell Box), while still maintaining high quality in complex areas (like the bunny's surface). 
+By implementing adaptive sampling, we can significantly reduce the rendering time for images with large areas of uniform color (like the walls of the Cornell Box), while still maintaining high quality in complex areas (like the bunny's surface).
 
 For `CBbunny.dae` with `max_ray_depth = 32`, `samplesPerPixel = 1024`, and `light_ray_per_sample = 4`, adaptive sampling reduces the rendering time from 248.2378s to 110.7405s. For profiling results, you can look at this table:
 
-| Region Type | Before Optimization | After Optimization | Speedup Factor |
-| :--- | :--- | :--- | :--- |
-| **Simple Areas (e.g., Walls)** | 20 ms / tile | 3 ms / tile | ~6.67x |
-| **Complex Areas (e.g., Shadows)** | 1,000 ms / tile | ~630 ms / tile | ~1.59x |
-| **Total Render Time (CBbunny)** | 248.2 s | 110.7 s | 2.24x |
+| Region Type                       | Before Optimization | After Optimization | Speedup Factor |
+| :-------------------------------- | :------------------ | :----------------- | :------------- |
+| **Simple Areas (e.g., Walls)**    | 20 ms / tile        | 3 ms / tile        | ~6.67x         |
+| **Complex Areas (e.g., Shadows)** | 1,000 ms / tile     | ~630 ms / tile     | ~1.59x         |
+| **Total Render Time (CBbunny)**   | 248.2 s             | 110.7 s            | 2.24x          |
 
 ### 5.3 Visual Comparison
 
@@ -451,7 +455,7 @@ Completing this Path Tracer marks a significant milestone in my journey through 
 While the current CPU-based renderer is robust, it is only the beginning. I am planning on exploring the following frontiers in the near future:
 
 - **GPU Acceleration (CUDA):** Moving the BVH traversal and intersection logic to the GPU is the next logical step. By leveraging parallel compute kernels, I aim to transform this offline renderer into a real-time interactive engine.
-- **AI-Driven Denoising:** High-quality path tracing is still computationally expensive. I plan to integrate AI denoisers (such as NVIDIA OptiX or Intel Open Image Denoise) to produce clean, production-ready images at much lower $SPP$ (Samples Per Pixel) counts.
+- **AI-Driven Denoising:** High-quality path tracing is still computationally expensive. I plan to integrate AI denoisers (such as NVIDIA OptiX or Intel Open Image Denoise) to produce clean, production-ready images at much lower _SPP_ (Samples Per Pixel) counts.
 
 **Final Thoughts**
 
