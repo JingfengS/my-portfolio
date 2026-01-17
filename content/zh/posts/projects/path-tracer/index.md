@@ -205,7 +205,7 @@ $$C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B
 针对多线程环境下 Tile 复杂度不均导致的“长尾效应”，我将 Tile 大小优化为 **16x16**，使 8 线程利用率更加均匀。
 
 <div style="width: 95%; margin: 0 auto;">
-    {{< figure src="profile.png" caption="**图 14:** Tray Profiler 可视化：不同区域 Tile 的渲染耗时差异显著20ms vs. 1000ms" alt="Result 1" >}}
+    {{< figure src="profile.png" caption="**图 14:** Tray Profiler 可视化：不同区域 Tile 的渲染耗时差异显著：20ms vs. 1000ms" alt="Result 1" >}}
 </div>
 
 ### 5.2 自适应采样 (Adaptive Sampling)
