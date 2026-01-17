@@ -86,6 +86,16 @@ $$C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B
     </div>
 </div>
 
+### 2.3 性能分析
+
+我对比了朴素实现与 BVH 加速实现在不同复杂度模型下的渲染性能。所有测试均在搭载 M2 芯片的 MacBook Pro 上以单线程方式运行。
+
+| Scene            | Triangle Count | Render Time (No BVH) | Render Time (With BVH) |
+| :--------------- | :------------- | :------------------- | :--------------------- |
+| **cow.dae**      | 5,856          | 32.48 s              | 0.0831 s               |
+| **beetle.dae**   | 7,512          | 38.96 s              | 0.0728 s               |
+| **CBdragon.dae** | 105,120        | > 1 hour             | 0.0899 s               |
+
 ---
 
 ## 3. 直接光照与采样策略比较
@@ -195,7 +205,7 @@ $$C = C_{trav} + \frac{S_A}{S_{total}} N_A C_{isect} + \frac{S_B}{S_{total}} N_B
 针对多线程环境下 Tile 复杂度不均导致的“长尾效应”，我将 Tile 大小优化为 **16x16**，使 8 线程利用率更加均匀。
 
 <div style="width: 95%; margin: 0 auto;">
-    {{< figure src="profile.png" caption="**图 14:** Tray Profiler 可视化：不同区域 Tile 的渲染耗时差异" alt="Result 1" >}}
+    {{< figure src="profile.png" caption="**图 14:** Tray Profiler 可视化：不同区域 Tile 的渲染耗时差异显著20ms vs. 1000ms" alt="Result 1" >}}
 </div>
 
 ### 5.2 自适应采样 (Adaptive Sampling)
@@ -213,6 +223,18 @@ $$I = 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \text{maxTolerance} \cdot \mu$$
 </div>
 
 **优化结果：** 在 `CBbunny` 场景中，自适应采样将总耗时从 **248s** 压缩至 **110s**，实现了 **2.24x** 的效率提升。
+
+### 5.3 优化总结
+
+通过实现自适应采样，我们可以显著减少渲染时间，特别是在大型均匀区域（如 Cornell Box 的墙壁）上，同时在复杂区域（如兔子的表面）上保持高保真度。
+
+在 CBbunny.dae 场景测试中（参数设置：`max_ray_depth = 32`，`samplesPerPixel = 1024`，`light_ray_per_sample = 4`），自适应采样将总渲染时间从 **248.2378s** 优化至 **110.7405s**。具体的性能画像（Profiling）分析结果详见下表：
+
+| Region Type                       | Before Optimization | After Optimization | Speedup Factor |
+| :-------------------------------- | :------------------ | :----------------- | :------------- |
+| **Simple Areas (e.g., Walls)**    | 20 ms / tile        | 3 ms / tile        | ~6.67x         |
+| **Complex Areas (e.g., Shadows)** | 1,000 ms / tile     | ~630 ms / tile     | ~1.59x         |
+| **Total Render Time (CBbunny)**   | 248.2 s             | 110.7 s            | 2.24x          |
 
 ---
 
